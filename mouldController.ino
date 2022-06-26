@@ -85,7 +85,7 @@ void loop() {
 
   if ( (now - lastSensorTime) >= readSensorInterval || isFirstLoop ) {
 
-    lastSensorTime = now;
+    lastSensorTime = millis();
     isFirstLoop = false;
 
     for (int i = 0; i < 2; i++) {
