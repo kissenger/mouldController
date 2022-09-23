@@ -30,8 +30,8 @@ bool isDeployed = true;
 char pass[] = "qwertyuiopisthetoprowofkeysonakeyboard";
 unsigned long lastBlinkTime = 0;    //will store last time Wi-Fi information was updated
 unsigned long lastSensorTime = 0;
-int nSamples = 50;    //average over this number of samples
-int sampleDelay = 10;   //ms delay between samples
+int nSamples = 5;    //average over this number of samples
+int sampleDelay = 100;   //ms delay between samples
 bool isFirstLoop = true;
 const unsigned long readSensorInterval = readInterval * 60UL * 1000UL;
 StaticJsonDocument<512> doc;
@@ -45,7 +45,9 @@ void setup() {
   
   Serial.begin(9600);
   delay(500);
-  Serial.println("Setup...");
+  if (!isDeployed) {
+    Serial.println("Setup...");
+  }
   
   Wire.begin();
   pinMode(LED_BUILTIN, OUTPUT);
@@ -74,7 +76,9 @@ void loop() {
     }
   } else {
     digitalWrite(LED_BUILTIN, LOW);
-    Serial.println("Wifi not connected, searching...");
+    if (!isDeployed) {
+      Serial.println("Wifi not connected, searching...");
+    }
     connectToWifi();
   }
 
@@ -163,15 +167,21 @@ void loop() {
     } 
         
     serializeJson(root, json);
-    Serial.println(json);
+    if (!isDeployed) {
+      Serial.println(json);
+    }
     
     // send to server
     if (client.connect(server, port)) {
       String requestBody = json;
       postData(requestBody);
-      Serial.println("request sent");
+      if (!isDeployed) {
+        Serial.println("request sent");
+      }
     } else {
-      Serial.println("request not sent");
+      if (!isDeployed) {
+        Serial.println("request not sent");
+      }
     }
 
     delay(500);
@@ -191,7 +201,7 @@ bool bmpStatus(){
 void postData(String body) {
   // send HTTP request header
   // https://stackoverflow.com/questions/58136179/post-request-with-wifinina-library-on-arduino-uno-wifi-rev-2
-  client.println("POST /api/new-data HTTP/1.1");
+  client.println("POST /iot/api/new-data HTTP/1.1");
   client.println("Host: " + String(server));
   client.println("Content-Type: application/json");
   client.println("Accept: */*");
@@ -209,13 +219,13 @@ void connectToWifi() {
     digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
     delay(100);
     digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));    
-    Serial.print("Attempting connection to ");
-    Serial.print(ssid);
-    Serial.println("...");
+//    Serial.print("Attempting connection to ");
+//    Serial.print(ssid);
+//    Serial.println("...");
     WiFi.begin(ssid, pass);
     delay(10000);
   }
-  Serial.println("Connected!");
+//  Serial.println("Connected!");
 }
 
 void selectMuxChannel(int i) {
