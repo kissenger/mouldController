@@ -11,24 +11,32 @@
 
 #define BMPADDR 0x77
 #define TCAADDR 0x70
+
+// comment this for deployed mode
+//#define TEST_MODE
+// check out this for better debugging output
+// https://forum.arduino.cc/t/toggling-debug-code/47041/9
+
+#ifdef TEST_MODE
+  bool isDeployed = false;
+  int readInterval = 0.1;     // minutes
+  char ssid[] = "IvyTerrace";
+//testing on live server
+  char server[] = "www.thingummy.cc";
+  int port = 80;
+// testing on localhost
+//  const IPAddress server(192,168,1,64);
+//  int port = 3000;
+#else 
+  bool isDeployed = true;
+  char ssid[] = "IvyTerrace_EXT";
+  char server[] = "www.thingummy.cc";
+  int port = 80;
+  int readInterval = 15;     // minutes
+#endif
+
 WiFiClient client;
-
-// deploy config
-char ssid[] = "IvyTerrace_EXT";
-char server[] = "www.thingummy.cc";
-int port = 80;
-int readInterval = 15;     // minutes
-bool isDeployed = true;
-
-// test config
-//char ssid[] = "IvyTerrace";
-//const IPAddress server(192,168,1,64);
-//int port = 3000;
-//int readInterval = 0.1;     // minutes
-//bool isDeployed = false;
-
 char pass[] = "qwertyuiopisthetoprowofkeysonakeyboard";
-unsigned long lastBlinkTime = 0;    //will store last time Wi-Fi information was updated
 unsigned long lastSensorTime = 0;
 int nSamples = 5;    //average over this number of samples
 int sampleDelay = 100;   //ms delay between samples
@@ -45,10 +53,11 @@ void setup() {
   
   Serial.begin(9600);
   delay(500);
-  if (!isDeployed) {
-    Serial.println("Setup...");
-  }
-  
+
+  #ifdef TEST_MODE
+    Serial.println("Entering setup()");
+  #endif
+
   Wire.begin();
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -66,21 +75,14 @@ void setup() {
 
 void loop() {
 
-  unsigned long now = millis();
-
-  // blink LED with interval equal to signal strength
-  if (WiFi.status() == WL_CONNECTED) {
-    if (now - lastBlinkTime >= WiFi.RSSI() * -10) {
-      lastBlinkTime = now;
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    }
-  } else {
-    digitalWrite(LED_BUILTIN, LOW);
-    if (!isDeployed) {
-      Serial.println("Wifi not connected, searching...");
-    }
+  if (WiFi.status() != WL_CONNECTED) {
+    // LED solid on to indicate an issue
+    digitalWrite(LED_BUILTIN, HIGH);
     connectToWifi();
   }
+  
+  unsigned long now = millis();
+  digitalWrite(LED_BUILTIN, LOW);
 
   if ( (now - lastSensorTime) >= readSensorInterval || isFirstLoop ) {
 
@@ -167,26 +169,26 @@ void loop() {
     } 
         
     serializeJson(root, json);
-    if (!isDeployed) {
+    #ifdef TEST_MODE
       Serial.println(json);
-    }
+    #endif
     
     // send to server
     if (client.connect(server, port)) {
+      #ifdef TEST_MODE
+        Serial.println("Server connection OK");
+      #endif     
       String requestBody = json;
       postData(requestBody);
-      if (!isDeployed) {
-        Serial.println("request sent");
-      }
+
     } else {
-      if (!isDeployed) {
-        Serial.println("request not sent");
-      }
+      digitalWrite(LED_BUILTIN, HIGH);
+      #ifdef TEST_MODE
+        Serial.println("Could not connect to server");
+      #endif
     }
 
     delay(500);
-
-      
   }
 }
 
@@ -215,17 +217,28 @@ void postData(String body) {
 }
 
 void connectToWifi() {
+
   while (WiFi.status() != WL_CONNECTED) {
-    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    delay(100);
-    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));    
-//    Serial.print("Attempting connection to ");
-//    Serial.print(ssid);
-//    Serial.println("...");
+    
+    #ifdef TEST_MODE
+      Serial.print("Attempting connection to ");
+      Serial.println(ssid);
+    #endif
+    
     WiFi.begin(ssid, pass);
     delay(10000);
+
   }
-//  Serial.println("Connected!");
+
+  #ifdef TEST_MODE
+    Serial.print("SSID: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    Serial.print("signal strength (RSSI): ");
+    Serial.print(WiFi.RSSI());
+    Serial.println(" dBm");
+  #endif
 }
 
 void selectMuxChannel(int i) {
