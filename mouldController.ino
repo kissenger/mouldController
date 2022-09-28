@@ -17,32 +17,38 @@
 #define MODE_TEST_LIVE 2
 
 //*********************************
+
 #define RUN_MODE MODE_TEST_DEPLOYED
+//#define RUN_MODE MODE_TEST_LOCAL
+//#define RUN_MODE MODE_TEST_LIVE
+
 //*********************************
 
 #if RUN_MODE != MODE_DEPLOYED
   #define DEBUG_PRINT(x)   Serial.print(x);
   #define DEBUG_PRINTLN(x) Serial.println(x);
+  #define DEBUG_WRITE(x)   Serial.write(x);
 #else
   #define DEBUG_PRINT(x);
   #define DEBUG_PRINTLN(x);
+  #define DEBUG_WRITE(x);
 #endif
 
 #if RUN_MODE == MODE_TEST_LIVE
   bool isDeployed = false;
-  int readInterval = 0.1;     // minutes
   char ssid[] = "IvyTerrace";
   char host[] = "www.thingummy.cc";
   char path[] = "/iot/api/new-data";
   int port = 80;
+  float readInterval = 0.1;     // minutes  
   
 #elif RUN_MODE == MODE_TEST_LOCAL 
   bool isDeployed = false;
-  int readInterval = 0.1;     // minutes
   char ssid[] = "IvyTerrace";
   const IPAddress host(192,168,1,64);
   char path[] = "/api/new-data";  
   int port = 3000;
+  float readInterval = 0.1;     // minutes
   
 #elif RUN_MODE == DEPLOYED
   bool isDeployed = true;
@@ -70,7 +76,7 @@ sensors_event_t ahtHumidity, ahtTemp;
 void setup() {
   
   Serial.begin(9600);
-  delay(1000);
+  while (!Serial);
   DEBUG_PRINTLN();
   
   Wire.begin();
@@ -93,33 +99,26 @@ void loop() {
   // blocking check on wifi connection
   // LED is solid on until wifi connection is achieved
   if (WiFi.status() != WL_CONNECTED) {
-    DEBUG_PRINT("Attempting to connect to " + String(ssid));
+    DEBUG_PRINT("Connecting to " + String(ssid));
     digitalWrite(LED_BUILTIN, HIGH);
     while (WiFi.status() != WL_CONNECTED) {
       WiFi.begin(ssid, pass);
       DEBUG_PRINT(".");
       delay(2000);
     }
+    digitalWrite(LED_BUILTIN, LOW);
     DEBUG_PRINTLN("...OK");
   }
 
-
-  // blocking check on server connection 
-  // LED will flash on and off at 1-sec intervals 
-  if (!client.connected()) {
-    DEBUG_PRINT("Attempting to connect to " + String(host) + String(path));
-    while (!client.connect(host, port)) {
-      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-      DEBUG_PRINT(".");
-      delay(500);
+  #if RUN_MODE != DEPLOYED
+    while (client.available()) {
+      char c = client.read();
+      DEBUG_WRITE(c);
     }
-    DEBUG_PRINTLN("...OK");    
-  }  
+  #endif
 
-  // main loop
   unsigned long now = millis();
-  digitalWrite(LED_BUILTIN, LOW);
-
+  
   if ( (now - lastSensorTime) >= readSensorInterval || isFirstLoop ) {
 
     lastSensorTime = millis();
@@ -202,13 +201,31 @@ void loop() {
       } 
 
     } 
-        
+    
+    client.stop();
+
+    // blocking check for server connection - should unblock when server becomes available
+    // note status takes time to wait for server response before timing out, which delys indication of an error
+    while (!client.connect(host, port)) {
+      digitalWrite(LED_BUILTIN, HIGH);
+      DEBUG_PRINTLN("Server connection lost, retrying");
+    }
+    digitalWrite(LED_BUILTIN, LOW);
+
+    // post data 
     serializeJson(root, json);
     DEBUG_PRINTLN(json);
-    //String requestBody = json;
-    postData(json);
+    String requestBody = json;
+    postData(requestBody);
 
-    delay(500);
+    // if data is recieved, we'll assume everything is ok
+    // TODO: this code is blocking so no good - cannot recover from an error without intervention
+//    while (!client.available()) {
+//      digitalWrite(LED_BUILTIN, HIGH);
+//    };
+//    digitalWrite(LED_BUILTIN, LOW);
+    
+
   }
 }
 
@@ -223,7 +240,8 @@ bool bmpStatus(){
 void postData(String body) {
   // send HTTP request header
   // https://stackoverflow.com/questions/58136179/post-request-with-wifinina-library-on-arduino-uno-wifi-rev-2
-  client.println("POST " + String(path) + " TTP/1.1");
+  client.println("POST " + String(path) + " HTTP/1.1");
+//  client.println("POST /iot/api/new-data HTTP/1.1");  
   client.println("Host: " + String(host));
   client.println("Content-Type: application/json");
   client.println("Accept: */*");
