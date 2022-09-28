@@ -12,25 +12,43 @@
 #define BMPADDR 0x77
 #define TCAADDR 0x70
 
-// comment this for deployed mode
-//#define TEST_MODE
-// check out this for better debugging output
-// https://forum.arduino.cc/t/toggling-debug-code/47041/9
+#define MODE_DEPLOYED 0
+#define MODE_TEST_LOCAL 1
+#define MODE_TEST_LIVE 2
 
-#ifdef TEST_MODE
+//*********************************
+#define RUN_MODE MODE_TEST_DEPLOYED
+//*********************************
+
+#if RUN_MODE != MODE_DEPLOYED
+  #define DEBUG_PRINT(x)   Serial.print(x);
+  #define DEBUG_PRINTLN(x) Serial.println(x);
+#else
+  #define DEBUG_PRINT(x);
+  #define DEBUG_PRINTLN(x);
+#endif
+
+#if RUN_MODE == MODE_TEST_LIVE
   bool isDeployed = false;
   int readInterval = 0.1;     // minutes
   char ssid[] = "IvyTerrace";
-//testing on live server
-  char server[] = "www.thingummy.cc";
+  char host[] = "www.thingummy.cc";
+  char path[] = "/iot/api/new-data";
   int port = 80;
-// testing on localhost
-//  const IPAddress server(192,168,1,64);
-//  int port = 3000;
-#else 
+  
+#elif RUN_MODE == MODE_TEST_LOCAL 
+  bool isDeployed = false;
+  int readInterval = 0.1;     // minutes
+  char ssid[] = "IvyTerrace";
+  const IPAddress host(192,168,1,64);
+  char path[] = "/api/new-data";  
+  int port = 3000;
+  
+#elif RUN_MODE == DEPLOYED
   bool isDeployed = true;
   char ssid[] = "IvyTerrace_EXT";
-  char server[] = "www.thingummy.cc";
+  char host[] = "www.thingummy.cc";
+  char path[] = "/iot/api/new-data";  
   int port = 80;
   int readInterval = 15;     // minutes
 #endif
@@ -52,12 +70,9 @@ sensors_event_t ahtHumidity, ahtTemp;
 void setup() {
   
   Serial.begin(9600);
-  delay(500);
-
-  #ifdef TEST_MODE
-    Serial.println("Entering setup()");
-  #endif
-
+  delay(1000);
+  DEBUG_PRINTLN();
+  
   Wire.begin();
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
@@ -75,12 +90,33 @@ void setup() {
 
 void loop() {
 
+  // blocking check on wifi connection
+  // LED is solid on until wifi connection is achieved
   if (WiFi.status() != WL_CONNECTED) {
-    // LED solid on to indicate an issue
+    DEBUG_PRINT("Attempting to connect to " + String(ssid));
     digitalWrite(LED_BUILTIN, HIGH);
-    connectToWifi();
+    while (WiFi.status() != WL_CONNECTED) {
+      WiFi.begin(ssid, pass);
+      DEBUG_PRINT(".");
+      delay(2000);
+    }
+    DEBUG_PRINTLN("...OK");
   }
-  
+
+
+  // blocking check on server connection 
+  // LED will flash on and off at 1-sec intervals 
+  if (!client.connected()) {
+    DEBUG_PRINT("Attempting to connect to " + String(host) + String(path));
+    while (!client.connect(host, port)) {
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+      DEBUG_PRINT(".");
+      delay(500);
+    }
+    DEBUG_PRINTLN("...OK");    
+  }  
+
+  // main loop
   unsigned long now = millis();
   digitalWrite(LED_BUILTIN, LOW);
 
@@ -151,10 +187,9 @@ void loop() {
       float tempSum = 0;
       
       for (int i = 0; i < nSamples; i++) {
+        
         bmpOutside.measureTemperature(); 
-        while (!bmpOutside.hasValue() ) {
-          delay(100);
-        }; 
+        while (!bmpOutside.hasValue()) delay(100);
         tempSum += bmpOutside.getTemperature();
 
         bmpOutside.measurePressure(); 
@@ -169,24 +204,9 @@ void loop() {
     } 
         
     serializeJson(root, json);
-    #ifdef TEST_MODE
-      Serial.println(json);
-    #endif
-    
-    // send to server
-    if (client.connect(server, port)) {
-      #ifdef TEST_MODE
-        Serial.println("Server connection OK");
-      #endif     
-      String requestBody = json;
-      postData(requestBody);
-
-    } else {
-      digitalWrite(LED_BUILTIN, HIGH);
-      #ifdef TEST_MODE
-        Serial.println("Could not connect to server");
-      #endif
-    }
+    DEBUG_PRINTLN(json);
+    //String requestBody = json;
+    postData(json);
 
     delay(500);
   }
@@ -203,8 +223,8 @@ bool bmpStatus(){
 void postData(String body) {
   // send HTTP request header
   // https://stackoverflow.com/questions/58136179/post-request-with-wifinina-library-on-arduino-uno-wifi-rev-2
-  client.println("POST /iot/api/new-data HTTP/1.1");
-  client.println("Host: " + String(server));
+  client.println("POST " + String(path) + " TTP/1.1");
+  client.println("Host: " + String(host));
   client.println("Content-Type: application/json");
   client.println("Accept: */*");
   client.println("Cache-Control: no-cache");
@@ -216,30 +236,7 @@ void postData(String body) {
   client.println(body);
 }
 
-void connectToWifi() {
 
-  while (WiFi.status() != WL_CONNECTED) {
-    
-    #ifdef TEST_MODE
-      Serial.print("Attempting connection to ");
-      Serial.println(ssid);
-    #endif
-    
-    WiFi.begin(ssid, pass);
-    delay(10000);
-
-  }
-
-  #ifdef TEST_MODE
-    Serial.print("SSID: ");
-    Serial.println(WiFi.SSID());
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
-    Serial.print("signal strength (RSSI): ");
-    Serial.print(WiFi.RSSI());
-    Serial.println(" dBm");
-  #endif
-}
 
 void selectMuxChannel(int i) {
   if (i > 7) return;
