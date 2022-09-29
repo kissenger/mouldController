@@ -114,6 +114,12 @@ void loop() {
       DEBUG_PRINT(".");
       delay(2000);
     }
+//    DEBUG_PRINTLN("...OK");    
+//    DEBUG_PRINT("Waiting for network time");    
+//    while (WiFi.getTime() == 0) {
+//      DEBUG_PRINT(".");
+//      delay(2000);
+//    }
     digitalWrite(LED_BUILTIN, LOW);
     DEBUG_PRINTLN("...OK");
   }
@@ -140,7 +146,7 @@ void loop() {
     selectMuxChannel(0);
     sensor1_data["sensor_name"] = "ahtInside";
     sensor1_data["sensor_type"] = "ahtx0";
-    sensor1_data["time"] = WiFi.getTime();   
+//    sensor1_data["time"] = WiFi.getTime();   
     sensor1_data["sensor_found"] = false; 
     sensor1_data["deployed"] = isDeployed;     
     if (ahtInside.getStatus() != 255) {
@@ -162,7 +168,7 @@ void loop() {
     selectMuxChannel(1);
     sensor2_data["sensor_name"] = "ahtOutside";
     sensor2_data["sensor_type"] = "ahtx0";
-    sensor2_data["time"] = WiFi.getTime();   
+//    sensor2_data["time"] = WiFi.getTime();   
     sensor2_data["sensor_found"] = false; 
     sensor2_data["deployed"] = isDeployed;     
     if (ahtOutside.getStatus() != 255) {
@@ -185,7 +191,7 @@ void loop() {
     ahtOutside.getEvent(&ahtHumidity, &ahtTemp);
     sensor3_data["sensor_name"] = "bmpOutside";
     sensor3_data["sensor_type"] = "bmp180";
-    sensor3_data["time"] = WiFi.getTime();  
+//    sensor3_data["time"] = WiFi.getTime();  
     sensor3_data["sensor_found"] = false;
     sensor3_data["deployed"] = isDeployed;
      
