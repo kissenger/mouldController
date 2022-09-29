@@ -8,21 +8,21 @@
 #include <ArduinoJson.h>
 #include <Wire.h>
 #include <BMP180I2C.h>
-
 #define BMPADDR 0x77
 #define TCAADDR 0x70
-
 #define MODE_DEPLOYED 0
 #define MODE_TEST_LOCAL 1
 #define MODE_TEST_LIVE 2
 
 //*********************************
 
-#define RUN_MODE MODE_TEST_DEPLOYED
+#define RUN_MODE MODE_DEPLOYED
 //#define RUN_MODE MODE_TEST_LOCAL
 //#define RUN_MODE MODE_TEST_LIVE
 
 //*********************************
+
+//- Set up run modes and server configs --------------------------------------
 
 #if RUN_MODE != MODE_DEPLOYED
   #define DEBUG_PRINT(x)   Serial.print(x);
@@ -59,6 +59,8 @@
   int readInterval = 15;     // minutes
 #endif
 
+//- Initialise Variables -----------------------------------------------------
+
 WiFiClient client;
 char pass[] = "qwertyuiopisthetoprowofkeysonakeyboard";
 unsigned long lastSensorTime = 0;
@@ -73,11 +75,15 @@ Adafruit_AHTX0 ahtInside;
 Adafruit_AHTX0 ahtOutside;
 sensors_event_t ahtHumidity, ahtTemp;
 
+//- Setup --------------------------------------------------------------------
+
 void setup() {
-  
-  Serial.begin(9600);
-  while (!Serial);
-  DEBUG_PRINTLN();
+
+  #if RUN_MODE != MODE_DEPLOYED 
+    Serial.begin(9600);
+    while (!Serial);
+    DEBUG_PRINTLN();
+  #endif
   
   Wire.begin();
   pinMode(LED_BUILTIN, OUTPUT);
@@ -93,6 +99,8 @@ void setup() {
   bmpOutside.begin();
 
 }
+
+//- loop --------------------------------------------------------------
 
 void loop() {
 
@@ -110,6 +118,7 @@ void loop() {
     DEBUG_PRINTLN("...OK");
   }
 
+  // print any server response to serial port - very useful for debugging
   #if RUN_MODE != DEPLOYED
     while (client.available()) {
       char c = client.read();
@@ -218,16 +227,11 @@ void loop() {
     String requestBody = json;
     postData(requestBody);
 
-    // if data is recieved, we'll assume everything is ok
-    // TODO: this code is blocking so no good - cannot recover from an error without intervention
-//    while (!client.available()) {
-//      digitalWrite(LED_BUILTIN, HIGH);
-//    };
-//    digitalWrite(LED_BUILTIN, LOW);
-    
-
   }
 }
+
+
+//- functions ---------------------------------------------------------
 
 bool bmpStatus(){
   if(bmpOutside.measureTemperature()) {
@@ -241,7 +245,6 @@ void postData(String body) {
   // send HTTP request header
   // https://stackoverflow.com/questions/58136179/post-request-with-wifinina-library-on-arduino-uno-wifi-rev-2
   client.println("POST " + String(path) + " HTTP/1.1");
-//  client.println("POST /iot/api/new-data HTTP/1.1");  
   client.println("Host: " + String(host));
   client.println("Content-Type: application/json");
   client.println("Accept: */*");
@@ -253,8 +256,6 @@ void postData(String body) {
   client.println(); // end HTTP request header
   client.println(body);
 }
-
-
 
 void selectMuxChannel(int i) {
   if (i > 7) return;
